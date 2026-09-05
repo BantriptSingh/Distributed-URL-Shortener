@@ -1,8 +1,11 @@
 package com.shorty.url;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record UrlCacheEntry(
+        Long urlId,
         String shortCode,
         String destinationUrl,
         boolean active,

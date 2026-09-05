@@ -1,6 +1,8 @@
 package com.shorty.url;
 
 import com.shorty.api.ApiException;
+import com.shorty.click.ClickCountStore;
+import com.shorty.click.ClickRepository;
 import com.shorty.config.AppProperties;
 import com.shorty.id.ShortCodeGenerator;
 import com.shorty.id.SnowflakeIdGenerator;
@@ -21,6 +23,8 @@ public class UrlService {
     private final DestinationUrlValidator destinations;
     private final CustomAliasValidator aliases;
     private final AppProperties props;
+    private final ClickCountStore clickCounts;
+    private final ClickRepository clickRepository;
 
     public UrlService(
             UrlRepository urls,
@@ -29,7 +33,9 @@ public class UrlService {
             SnowflakeIdGenerator ids,
             DestinationUrlValidator destinations,
             CustomAliasValidator aliases,
-            AppProperties props) {
+            AppProperties props,
+            ClickCountStore clickCounts,
+            ClickRepository clickRepository) {
         this.urls = urls;
         this.cache = cache;
         this.codes = codes;
@@ -37,6 +43,8 @@ public class UrlService {
         this.destinations = destinations;
         this.aliases = aliases;
         this.props = props;
+        this.clickCounts = clickCounts;
+        this.clickRepository = clickRepository;
     }
 
     @Transactional
@@ -49,6 +57,7 @@ public class UrlService {
         }
 
         UrlEntity saved = persistWithRetry(destination, assigned, custom, request);
+        clickCounts.set(ShortCodes.normalize(saved.getShortCode()), 0);
         UrlCacheEntry entry = toCache(saved);
         cache.putPositive(entry);
         return new CreateUrlResponse(
@@ -67,27 +76,36 @@ public class UrlService {
         if (entry == null || !entry.active()) {
             throw new ApiException(HttpStatus.NOT_FOUND, "not_found", "Short link not found");
         }
-        Long clicks = entry.publicClickCount() ? entry.clickCount() : null;
+        Long clicks = null;
+        if (entry.publicClickCount()) {
+            clicks = clickCounts
+                    .get(ShortCodes.normalize(entry.shortCode()))
+                    .orElse(entry.clickCount());
+        }
         return new PublicUrlResponse(
                 entry.shortCode(), entry.createdAt(), entry.active(), entry.expiresAt(), clicks);
     }
 
-    /**
-     * Cache-first lookup for redirects. Does not record clicks (M2).
-     *
-     * @return destination or unlock URL; throws 404/410
-     */
-    public String resolveRedirectTarget(String code) {
+    public UrlCacheEntry requireActive(String code) {
         UrlCacheEntry entry = resolveEntry(code);
         if (entry == null || !entry.active()) {
             throw new ApiException(HttpStatus.NOT_FOUND, "not_found", "Short link not found");
         }
+        return entry;
+    }
+
+    public String unlockUrl(String shortCode) {
+        return props.frontendBaseUrl().replaceAll("/$", "") + "/unlock/" + shortCode;
+    }
+
+    public String resolveRedirectTarget(String code) {
+        UrlCacheEntry entry = requireActive(code);
         Instant now = Instant.now();
         if (entry.expired(now) || entry.maxClicksReached()) {
             throw new ApiException(HttpStatus.GONE, "gone", "This short link is no longer available");
         }
         if (entry.passwordProtected()) {
-            return props.frontendBaseUrl().replaceAll("/$", "") + "/unlock/" + entry.shortCode();
+            return unlockUrl(entry.shortCode());
         }
         return entry.destinationUrl();
     }
@@ -155,13 +173,16 @@ public class UrlService {
     }
 
     private UrlCacheEntry toCache(UrlEntity entity) {
+        long count = clickCounts.getOrLoad(
+                ShortCodes.normalize(entity.getShortCode()), () -> clickRepository.countByUrlId(entity.getId()));
         return new UrlCacheEntry(
+                entity.getId(),
                 entity.getShortCode(),
                 entity.getDestinationUrl(),
                 entity.isActive(),
                 entity.getExpiresAt(),
                 entity.getMaxClicks(),
-                0L,
+                count,
                 entity.getPasswordHash() != null && !entity.getPasswordHash().isBlank(),
                 entity.isPublicClickCount(),
                 entity.getCreatedAt());

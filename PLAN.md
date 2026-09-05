@@ -32,7 +32,7 @@ These are locked unless you override them before a milestone starts.
 | A14 | Password reset (v1) | No mail provider. `POST /forgot-password` always returns 204. **If `DEV_EXPOSE_RESET_TOKEN=true`**, login/forgot responses may include `devResetToken` labeled **DEV ONLY**. Production: `DEV_EXPOSE_RESET_TOKEN=false`; token only in structured logs at INFO in non-prod. |
 | A15 | JWT | Access **15 min** (`JWT_SECRET`). Refresh **14 days** (`JWT_REFRESH_SECRET`), stored hashed, **rotated on use**, revoke on logout. |
 | A16 | API keys | Raw form `sk_{env}_{random}` shown **once**. Store hash + 8-char prefix. Scopes: `read`, `write`. Header `X-API-Key` or `Authorization: Bearer sk_...` (detect prefix). |
-| A17 | Geo / Safe Browsing later | Geo: interface `GeoResolver`; v1 `HeaderGeoResolver`. Safe browsing: `UrlReputation` + `classpath:denylist.txt`; document Google Safe Browsing hook in README. |
+| A17 | Geo / Safe Browsing later | Geo: interface `GeoResolver`; v1 `HeaderGeoResolver` runs **on the redirect/producer** (request headers still present) and **country is written into the XADD payload**. Consumers must not call `HeaderGeoResolver`. Safe browsing: `UrlReputation` + `classpath:denylist.txt`; document Google Safe Browsing hook in README. |
 | A18 | SSRF | After URL parse (http/https only), **resolve DNS** (`InetAddress.getAllByName`), reject if any address is loopback, RFC1918, link-local, ULA (fc00::/7), IPv4-mapped private, or metadata (`169.254.169.254`, `fd00:ec2::254`). Fail closed on resolution failure. |
 | A19 | CORS | `CORS_ALLOWED_ORIGINS` comma-separated. **Never** `*`. Credentials allowed for cookie unlock if used. |
 | A20 | QR | Client-side (`qrcode`) **and** `GET /api/v1/urls/{code}/qr.png` (ZXing). Auth: public if the code exists and is active (QR is the short URL, not analytics). |
@@ -45,6 +45,7 @@ These are locked unless you override them before a milestone starts.
 | A27 | Guest POST rate | 30/min per IP. Authenticated JWT create: 120/min per user. API key write: 300/min per key. Redirect: 600/min per IP. Auth endpoints: 10/min per IP. |
 | A28 | Bot UA | Static list (curl, bot, spider, slurp, facebookexternalhit, etc.). Clicks still stored with `is_bot=true`. “Real” totals exclude bots; `botClicks` is separate. |
 | A29 | Unlock rate limit | `POST /api/v1/urls/{code}/unlock` is **10 attempts/min per IP per code** (same tier as auth). Wired in **M4** with the rest of Redis rate limiting — password gates are Core v1 (A6). |
+| A30 | Live SSE cap | Cap concurrent connections on public `GET /api/v1/analytics/live` (e.g. **500**) in **M4** rate-limiting work. Unauthenticated streaming must not be unbounded. Do not implement in M2. |
 
 ---
 
@@ -138,13 +139,15 @@ M10 v1.1 only after Core is live
 **Goal:** Correct click logging under **2+ replicas**.
 
 **Includes**
-- `XGROUP CREATE` (MKSTREAM) at boot.
+- `XGROUP CREATE` (MKSTREAM) at boot; **treat BUSYGROUP as success** so Railway restarts do not fail.
+- Geo: `HeaderGeoResolver` on the **redirect producer** only; country is part of the XADD body.
 - `XADD` click payloads (shortCode, urlId, ua, referer, ip **raw only in stream**, hashed in consumer — raw IP must not hit Postgres). `MAXLEN ~ 100000`.
 - `XREADGROUP`, persist `clicks`, `XACK`.
 - `XAUTOCLAIM` sweep.
 - Analytics query service: totals, bot vs real, groupBy day/week, device/browser/os, referrer, country.
-- `GET /api/v1/urls/{code}/analytics` — **401 without owner** (temporary: if no auth yet, lock behind a header `X-Owner-Token` **or** defer endpoint until M3). **Call:** implement analytics **service + repo now**; expose HTTP in M3 once JWT exists. SSE similarly: `SseEmitter` registry in M2, HTTP in M3. **Exception:** public `GET /api/v1/analytics/live` can ship in M2 for later 3D.
-- Dual-consumer Testcontainers test: two `ClickConsumer` instances, N messages, **exactly-once processing** (N rows, no dup `id` from same stream ID — use stream ID as idempotency key column `clicks.stream_id UNIQUE`).
+- `GET /api/v1/urls/{code}/analytics` deferred to M3 (needs owner auth). Analytics **service** ships in M2.
+- Public `GET /api/v1/analytics/live` SSE in M2. Connection cap is **A30 / M4**.
+- Dual-consumer Testcontainers test: two `ClickConsumer` instances, N messages, **exactly-once processing** (`clicks.stream_id UNIQUE`).
 
 **Schema add:** `clicks.stream_id VARCHAR UNIQUE` for idempotent `XCLAIM` redelivery.
 
@@ -175,8 +178,9 @@ M10 v1.1 only after Core is live
 
 **Includes**
 - Redis sliding-window limiter; 429 + `Retry-After`; fail-open (A3).
+- Unlock brute-force limit (A29); live SSE connection cap (A30, e.g. 500).
 - Protocol denylist; DNS SSRF; `denylist.txt`.
-- Consumer hashes IP with `IP_HASH_SALT` before insert (stream payload may include IP ephemerally).
+- IP hashing already in the M2 consumer; M4 adds tests that `ip_hash` is never the raw address.
 - Negative-cache already in M1 — add tests that 404 is cached.
 
 **Runnable:** `javascript:` rejected; private IP rejected; burst POST → 429.

@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.shorty.api.ApiException;
+import com.shorty.click.ClickCountStore;
+import com.shorty.click.ClickRepository;
 import com.shorty.config.AppProperties;
 import com.shorty.id.ShortCodeGenerator;
 import com.shorty.id.SnowflakeIdGenerator;
@@ -34,6 +36,12 @@ class UrlServiceRetryTest {
     @Mock
     private ShortCodeGenerator codes;
 
+    @Mock
+    private ClickCountStore clickCounts;
+
+    @Mock
+    private ClickRepository clickRepository;
+
     private UrlService service;
 
     @BeforeEach
@@ -51,7 +59,10 @@ class UrlServiceRetryTest {
                 new SnowflakeIdGenerator(1),
                 new DestinationUrlValidator(),
                 new CustomAliasValidator(),
-                props);
+                props,
+                clickCounts,
+                clickRepository);
+        org.mockito.Mockito.lenient().when(clickCounts.getOrLoad(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(0L);
     }
 
     @Test

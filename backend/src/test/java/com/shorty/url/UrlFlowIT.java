@@ -9,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.shorty.click.ClickRepository;
+import com.shorty.support.InfrastructureIT;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -16,37 +18,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
-class UrlFlowIT {
-
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withDatabaseName("shortener")
-            .withUsername("shortener")
-            .withPassword("changeme");
-
-    @Container
-    static GenericContainer<?> redis =
-            new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
-
-    @DynamicPropertySource
-    static void registerProps(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.data.redis.url", () -> "redis://" + redis.getHost() + ":" + redis.getMappedPort(6379));
-        registry.add("app.base-url", () -> "http://localhost:8080");
-    }
+class UrlFlowIT extends InfrastructureIT {
 
     @Autowired
     MockMvc mvc;
@@ -59,6 +34,9 @@ class UrlFlowIT {
 
     @Autowired
     UrlRepository urlRepository;
+
+    @Autowired
+    ClickRepository clickRepository;
 
     @Test
     void createRedirectPublicGetAndCache() throws Exception {
@@ -78,7 +56,10 @@ class UrlFlowIT {
         JsonNode created = objectMapper.readTree(createdJson);
         assertThat(created.get("destinationUrl").asText()).isEqualTo("https://example.com/docs");
 
-        mvc.perform(get("/s/MYLINK"))
+        mvc.perform(get("/s/MYLINK")
+                        .header("CF-IPCountry", "DE")
+                        .header("User-Agent", "Mozilla/5.0 Chrome/120.0.0.0")
+                        .header("Referer", "https://news.example"))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", "https://example.com/docs"));
 
@@ -89,6 +70,18 @@ class UrlFlowIT {
                 .andExpect(jsonPath("$.clickCount").doesNotExist());
 
         assertThat(redisTemplate.hasKey("url:mylink")).isTrue();
+
+        var url = urlRepository.findByShortCodeIgnoreCase("mylink").orElseThrow();
+        waitForClicks(url.getId(), 1);
+        var click = clickRepository.findAll().stream()
+                .filter(c -> c.getUrlId().equals(url.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(click.getCountry()).isEqualTo("DE");
+        assertThat(click.getIpHash()).hasSize(64);
+        assertThat(click.getIpHash()).doesNotContain("127.0.0.1");
+        assertThat(click.getBrowser()).isEqualTo("chrome");
+        assertThat(click.isBot()).isFalse();
 
         mvc.perform(post("/api/v1/urls")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -144,5 +137,15 @@ class UrlFlowIT {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("invalid_url"));
+    }
+
+    private void waitForClicks(long urlId, int expected) throws InterruptedException {
+        for (int i = 0; i < 80; i++) {
+            if (clickRepository.countByUrlId(urlId) >= expected) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("timed out waiting for " + expected + " clicks on url " + urlId);
     }
 }

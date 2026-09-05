@@ -1,6 +1,9 @@
-# M1 local / Testcontainers override via env. Secrets: see repo .env.example.
+# Local / Testcontainers override via env. Secrets: see repo .env.example.
 
-server.port: 8080
+server:
+  port: 8080
+  servlet:
+    async-request-timeout: 300000
 
 spring:
   application.name: shortener
@@ -31,3 +34,10 @@ app:
   short-code:
     length: 7
     max-retries: 5
+  clicks:
+    stream: clicks
+    group: click-workers
+    maxlen: 100000
+    consumer-enabled: true
+    block: 2s
+    claim-idle: 60s
