@@ -6,6 +6,7 @@ import java.time.Instant;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record UrlCacheEntry(
         Long urlId,
+        Long ownerId,
         String shortCode,
         String destinationUrl,
         boolean active,
@@ -14,6 +15,7 @@ public record UrlCacheEntry(
         long clickCount,
         boolean passwordProtected,
         boolean publicClickCount,
+        boolean hidePreview,
         Instant createdAt
 ) {
     public boolean expired(Instant now) {

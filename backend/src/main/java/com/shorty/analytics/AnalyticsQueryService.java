@@ -110,4 +110,37 @@ public class AnalyticsQueryService {
         }
         return Instant.parse(value.toString());
     }
+
+    public DashboardSummary summary(long ownerId) {
+        Number links = (Number) em.createNativeQuery("SELECT COUNT(*) FROM urls WHERE owner_id = :oid")
+                .setParameter("oid", ownerId)
+                .getSingleResult();
+        Number clicks = (Number) em.createNativeQuery(
+                        "SELECT COUNT(*) FROM clicks c JOIN urls u ON u.id = c.url_id WHERE u.owner_id = :oid")
+                .setParameter("oid", ownerId)
+                .getSingleResult();
+        @SuppressWarnings("unchecked")
+        List<Object[]> top = em.createNativeQuery(
+                        "SELECT u.short_code, COUNT(c.id) FROM urls u LEFT JOIN clicks c ON c.url_id = u.id "
+                                + "WHERE u.owner_id = :oid GROUP BY u.short_code ORDER BY COUNT(c.id) DESC LIMIT 5")
+                .setParameter("oid", ownerId)
+                .getResultList();
+        @SuppressWarnings("unchecked")
+        List<Object[]> recent = em.createNativeQuery(
+                        "SELECT u.short_code, c.timestamp FROM clicks c JOIN urls u ON u.id = c.url_id "
+                                + "WHERE u.owner_id = :oid ORDER BY c.timestamp DESC LIMIT 10")
+                .setParameter("oid", ownerId)
+                .getResultList();
+        return new DashboardSummary(
+                links == null ? 0 : links.longValue(),
+                clicks == null ? 0 : clicks.longValue(),
+                top.stream()
+                        .map(r -> new CountRow(String.valueOf(r[0]), ((Number) r[1]).longValue()))
+                        .toList(),
+                recent.stream()
+                        .map(r -> new SeriesPoint(toInstant(r[1]), 1))
+                        .toList());
+    }
+
+    public record DashboardSummary(long links, long totalClicks, List<CountRow> topLinks, List<SeriesPoint> recent) {}
 }

@@ -95,15 +95,13 @@ class ClickExactlyOnceIT extends InfrastructureIT {
         pool.shutdown();
         assertThat(pool.awaitTermination(25, TimeUnit.SECONDS)).isTrue();
 
-        assertThat(clicks.countByUrlId(url.getId())).isEqualTo(n);
-        assertThat(clicks.findAll().stream().map(ClickEntity::getStreamId).distinct().count())
-                .isEqualTo(n);
-        clicks.findAll().forEach(row -> {
-            if (row.getUrlId().equals(url.getId())) {
-                assertThat(row.getIpHash()).hasSize(64);
-                assertThat(row.getIpHash()).doesNotStartWith("203.0.113");
-                assertThat(row.getCountry()).isEqualTo("US");
-            }
+        var rows = clicks.findAll().stream().filter(c -> c.getUrlId().equals(url.getId())).toList();
+        assertThat(rows).hasSize(n);
+        assertThat(rows.stream().map(ClickEntity::getStreamId).distinct()).hasSize(n);
+        rows.forEach(row -> {
+            assertThat(row.getIpHash()).hasSize(64);
+            assertThat(row.getIpHash()).doesNotStartWith("203.0.113");
+            assertThat(row.getCountry()).isEqualTo("US");
         });
 
         Instant from = now.minus(1, ChronoUnit.HOURS);

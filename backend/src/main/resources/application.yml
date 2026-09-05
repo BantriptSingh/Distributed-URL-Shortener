@@ -41,3 +41,8 @@ app:
     consumer-enabled: true
     block: 2s
     claim-idle: 60s
+  jwt:
+    access-ttl: 15m
+    refresh-ttl: 14d
+  unlock-ttl: 5m
+  claim-ttl: 7d

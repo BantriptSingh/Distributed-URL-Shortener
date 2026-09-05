@@ -50,6 +50,9 @@ public class UrlEntity {
     @Column(name = "public_click_count", nullable = false)
     private boolean publicClickCount;
 
+    @Column(name = "hide_preview", nullable = false)
+    private boolean hidePreview;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -142,6 +145,14 @@ public class UrlEntity {
 
     public void setPublicClickCount(boolean publicClickCount) {
         this.publicClickCount = publicClickCount;
+    }
+
+    public boolean isHidePreview() {
+        return hidePreview;
+    }
+
+    public void setHidePreview(boolean hidePreview) {
+        this.hidePreview = hidePreview;
     }
 
     public Instant getCreatedAt() {

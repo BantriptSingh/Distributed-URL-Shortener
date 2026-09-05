@@ -1,13 +1,17 @@
 package com.shorty.click;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ClickWriter {
+
+    public record PersistResult(boolean inserted, String shortCode) {}
 
     private final ClickRepository clicks;
     private final com.shorty.id.SnowflakeIdGenerator ids;
@@ -21,12 +25,13 @@ public class ClickWriter {
     }
 
     /**
-     * @return true if a new row was inserted
+     * @return whether a new row was inserted; duplicate {@code stream_id} returns {@code inserted=false}
+     *     (safe to ACK). Any other DB error is thrown so the message stays pending.
      */
     @Transactional
-    public boolean persistIfNew(String streamId, Map<Object, Object> body) {
+    public PersistResult persistIfNew(String streamId, Map<Object, Object> body) {
         if (clicks.existsByStreamId(streamId)) {
-            return false;
+            return new PersistResult(false, str(body, "shortCode"));
         }
         ClickEntity row = new ClickEntity();
         row.setId(ids.nextId());
@@ -44,10 +49,31 @@ public class ClickWriter {
         row.setBot(Boolean.parseBoolean(str(body, "isBot")));
         try {
             clicks.saveAndFlush(row);
-            return true;
-        } catch (DataIntegrityViolationException dup) {
-            return false;
+            return new PersistResult(true, str(body, "shortCode"));
+        } catch (DataIntegrityViolationException e) {
+            if (isStreamIdDuplicate(e)) {
+                return new PersistResult(false, str(body, "shortCode"));
+            }
+            throw e;
         }
+    }
+
+    static boolean isStreamIdDuplicate(DataIntegrityViolationException error) {
+        Throwable t = error;
+        while (t != null) {
+            if (t instanceof ConstraintViolationException cve) {
+                String name = cve.getConstraintName();
+                if (name != null && name.toLowerCase(Locale.ROOT).contains("stream_id")) {
+                    return true;
+                }
+            }
+            String msg = t.getMessage();
+            if (msg != null && msg.toLowerCase(Locale.ROOT).contains("stream_id")) {
+                return true;
+            }
+            t = t.getCause();
+        }
+        return false;
     }
 
     private static Instant parseTs(String raw) {

@@ -4,18 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.shorty.api.ApiException;
+import com.shorty.auth.GuestClaimTokenRepository;
 import com.shorty.click.ClickCountStore;
 import com.shorty.click.ClickRepository;
 import com.shorty.config.AppProperties;
 import com.shorty.id.ShortCodeGenerator;
 import com.shorty.id.SnowflakeIdGenerator;
 import java.time.Duration;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
 class UrlServiceRetryTest {
@@ -41,6 +43,12 @@ class UrlServiceRetryTest {
 
     @Mock
     private ClickRepository clickRepository;
+
+    @Mock
+    private GuestClaimTokenRepository claims;
+
+    @Mock
+    private PasswordEncoder passwords;
 
     private UrlService service;
 
@@ -61,8 +69,11 @@ class UrlServiceRetryTest {
                 new CustomAliasValidator(),
                 props,
                 clickCounts,
-                clickRepository);
-        org.mockito.Mockito.lenient().when(clickCounts.getOrLoad(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(0L);
+                clickRepository,
+                claims,
+                passwords,
+                Duration.ofDays(7));
+        lenient().when(clickCounts.getOrLoad(any(), any())).thenReturn(0L);
     }
 
     @Test
@@ -72,7 +83,7 @@ class UrlServiceRetryTest {
                 .thenThrow(new DataIntegrityViolationException("dup"))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        var created = service.create(new CreateUrlRequest("https://example.com/x", null, null, null, null, false));
+        var created = service.create(req("https://example.com/x", null), 1L);
 
         assertThat(created.shortCode()).isEqualTo("bbbbbbb");
         verify(codes, times(2)).next(7);
@@ -84,9 +95,7 @@ class UrlServiceRetryTest {
         when(codes.next(anyInt())).thenReturn("ccccccc");
         when(urls.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("dup"));
 
-        assertThatThrownBy(
-                        () -> service.create(
-                                new CreateUrlRequest("https://example.com/x", null, null, null, null, false)))
+        assertThatThrownBy(() -> service.create(req("https://example.com/x", null), 1L))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> {
                     ApiException api = (ApiException) ex;
@@ -100,17 +109,19 @@ class UrlServiceRetryTest {
     void customAliasConflictIs409() {
         when(urls.existsByShortCodeIgnoreCase("mylink")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(
-                        new CreateUrlRequest("https://example.com/x", "MyLink", null, null, null, false)))
+        assertThatThrownBy(() -> service.create(req("https://example.com/x", "MyLink"), 1L))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getStatus()).isEqualTo(HttpStatus.CONFLICT));
     }
 
     @Test
     void rejectsNonHttpProtocols() {
-        assertThatThrownBy(() -> service.create(
-                        new CreateUrlRequest("javascript:alert(1)", null, Instant.now(), null, null, false)))
+        assertThatThrownBy(() -> service.create(req("javascript:alert(1)", null), 1L))
                 .isInstanceOf(ApiException.class)
                 .satisfies(ex -> assertThat(((ApiException) ex).getCode()).isEqualTo("invalid_url"));
+    }
+
+    private static CreateUrlRequest req(String url, String alias) {
+        return new CreateUrlRequest(url, alias, null, null, null, false, false, null);
     }
 }

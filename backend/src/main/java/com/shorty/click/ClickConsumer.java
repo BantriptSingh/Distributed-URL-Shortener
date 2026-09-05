@@ -91,12 +91,13 @@ public class ClickConsumer {
     boolean handle(MapRecord<String, Object, Object> record) {
         String streamId = record.getId().getValue();
         try {
-            boolean inserted = writer.persistIfNew(streamId, record.getValue());
+            var result = writer.persistIfNew(streamId, record.getValue());
             ack(streamId);
-            if (inserted) {
+            if (result.inserted()) {
                 liveHub.pulse();
+                liveHub.pulseCode(result.shortCode());
             }
-            return inserted;
+            return result.inserted();
         } catch (RuntimeException e) {
             log.warn("Click persist failed streamId={} consumer={}", streamId, consumerName, e);
             return false;

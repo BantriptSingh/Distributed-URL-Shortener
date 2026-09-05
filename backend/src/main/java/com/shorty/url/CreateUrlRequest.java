@@ -13,5 +13,7 @@ public record CreateUrlRequest(
         Instant expiresAt,
         @Positive Integer maxClicks,
         @Size(max = 20) List<String> tags,
-        Boolean publicClickCount
+        Boolean publicClickCount,
+        Boolean hidePreview,
+        String password
 ) {}

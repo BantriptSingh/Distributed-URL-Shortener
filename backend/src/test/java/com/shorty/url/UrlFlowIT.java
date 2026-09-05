@@ -67,6 +67,7 @@ class UrlFlowIT extends InfrastructureIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shortCode").value("mylink"))
                 .andExpect(jsonPath("$.isActive").value(true))
+                .andExpect(jsonPath("$.destinationUrl").value("https://example.com/docs"))
                 .andExpect(jsonPath("$.clickCount").doesNotExist());
 
         assertThat(redisTemplate.hasKey("url:mylink")).isTrue();

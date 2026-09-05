@@ -21,6 +21,13 @@ public class ClickCountStore {
         return v == null ? 0L : v;
     }
 
+    public void decrement(String normalizedCode) {
+        Long v = redis.opsForValue().increment(PREFIX + normalizedCode, -1);
+        if (v != null && v < 0) {
+            set(normalizedCode, 0);
+        }
+    }
+
     public void set(String normalizedCode, long n) {
         redis.opsForValue().set(PREFIX + normalizedCode, Long.toString(n));
     }

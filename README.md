@@ -18,7 +18,9 @@ cd backend
 - Create: `POST /api/v1/urls` with `{"destinationUrl":"https://example.com"}` (alias `longUrl` accepted)
 - Redirect: `GET /s/{code}` → 302, click logged via Redis Streams (`click-workers` group)
 - Live pulses: `GET /api/v1/analytics/live` (SSE)
-- Public metadata: `GET /api/v1/urls/{code}` (click totals only if `publicClickCount` was set at create)
+- Public metadata: `GET /api/v1/urls/{code}` includes `destinationUrl` unless the owner set `hidePreview`
+- Auth: `POST /api/v1/auth/register` and `/login`; Swagger at http://localhost:8080/swagger-ui.html
+- Generate real `JWT_SECRET` / `JWT_REFRESH_SECRET` / `UNLOCK_TOKEN_SECRET` / `CLAIM_TOKEN_SECRET` before production (`openssl rand -base64 48`). Local placeholders are in `.env.example`. Set `DEV_EXPOSE_RESET_TOKEN=false` when you are not debugging password reset.
 
 Custom aliases are stored and looked up **lowercase**. Random codes are 7-character Base62 and are **not** derived from database IDs.
 

@@ -24,8 +24,8 @@ public class ClickEventPublisher {
         this.props = props;
     }
 
-    /** Fail-open: redirect must not fail if Redis stream write fails. */
-    public void publish(ClickEvent event) {
+    /** @return true if the event was written to the stream */
+    public boolean publish(ClickEvent event) {
         try {
             Map<String, String> body = new HashMap<>();
             body.put("urlId", Long.toString(event.urlId()));
@@ -42,9 +42,11 @@ public class ClickEventPublisher {
             MapRecord<String, String, String> record =
                     StreamRecords.mapBacked(body).withStreamKey(props.stream());
             XAddOptions options = XAddOptions.maxlen(props.maxlen()).approximateTrimming(true);
-            redis.opsForStream().add(record, options);
+            var id = redis.opsForStream().add(record, options);
+            return id != null;
         } catch (RuntimeException e) {
             log.error("Failed to enqueue click event urlId={}", event.urlId(), e);
+            return false;
         }
     }
 }
