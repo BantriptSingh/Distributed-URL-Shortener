@@ -1,0 +1,16 @@
+.env
+.idea/
+*.iml
+.vscode/
+.DS_Store
+.gradle/
+**/build/
+**/out/
+**/bin/
+*.log
+.cursor/
+node_modules/
+dist/
+coverage/
+backend/.env
+frontend/.env
