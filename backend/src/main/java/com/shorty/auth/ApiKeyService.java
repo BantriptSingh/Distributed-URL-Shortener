@@ -66,7 +66,7 @@ public class ApiKeyService {
         }
         row.setLastUsedAt(Instant.now());
         keys.save(row);
-        return new AuthPrincipal(row.getUserId(), "", Set.copyOf(row.getScopes()), true);
+        return new AuthPrincipal(row.getUserId(), "", Set.copyOf(row.getScopes()), true, row.getId());
     }
 
     private static List<String> normalizeScopes(List<String> scopes) {

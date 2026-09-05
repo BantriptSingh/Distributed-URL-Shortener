@@ -3,10 +3,10 @@ package com.shorty.auth;
 import java.util.List;
 import java.util.Set;
 
-public record AuthPrincipal(long userId, String email, Set<String> scopes, boolean apiKey) {
+public record AuthPrincipal(long userId, String email, Set<String> scopes, boolean apiKey, Long apiKeyId) {
 
     public static AuthPrincipal jwt(long userId, String email) {
-        return new AuthPrincipal(userId, email, Set.of("read", "write"), false);
+        return new AuthPrincipal(userId, email, Set.of("read", "write"), false, null);
     }
 
     public boolean canRead() {

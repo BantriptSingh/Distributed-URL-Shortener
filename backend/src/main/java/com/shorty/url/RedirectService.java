@@ -57,7 +57,7 @@ public class RedirectService {
         boolean enqueued = publisher.publish(new ClickEvent(
                 entry.urlId(),
                 entry.shortCode(),
-                clientIp(request),
+                com.shorty.web.ClientIps.from(request),
                 ua,
                 request.getHeader("Referer"),
                 geo.resolve(request),
@@ -67,14 +67,6 @@ public class RedirectService {
             clickCounts.decrement(normalized);
         }
         return entry.destinationUrl();
-    }
-
-    static String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     private static String unlockToken(HttpServletRequest request) {

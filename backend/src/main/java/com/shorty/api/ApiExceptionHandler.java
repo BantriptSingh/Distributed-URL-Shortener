@@ -13,7 +13,12 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, Object>> handleApi(ApiException ex) {
-        return ResponseEntity.status(ex.getStatus()).body(body(ex.getCode(), ex.getMessage()));
+        var body = body(ex.getCode(), ex.getMessage());
+        var builder = ResponseEntity.status(ex.getStatus());
+        if (ex.getRetryAfterSeconds() != null) {
+            builder.header("Retry-After", Integer.toString(ex.getRetryAfterSeconds()));
+        }
+        return builder.body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

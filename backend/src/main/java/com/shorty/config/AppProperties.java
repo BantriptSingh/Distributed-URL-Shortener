@@ -11,8 +11,19 @@ public record AppProperties(
         String frontendBaseUrl,
         String corsAllowedOrigins,
         Cache cache,
-        ShortCode shortCode
+        ShortCode shortCode,
+        RateLimit rateLimit,
+        int liveSseMax
 ) {
+    public AppProperties {
+        if (rateLimit == null) {
+            rateLimit = RateLimit.defaults();
+        }
+        if (liveSseMax <= 0) {
+            liveSseMax = 500;
+        }
+    }
+
     public List<String> corsOrigins() {
         return Arrays.stream(corsAllowedOrigins.split(","))
                 .map(String::trim)
@@ -23,4 +34,17 @@ public record AppProperties(
     public record Cache(Duration positiveTtl, Duration negativeTtl) {}
 
     public record ShortCode(int length, int maxRetries) {}
+
+    public record RateLimit(
+            int guestCreatePerMinute,
+            int jwtCreatePerMinute,
+            int apiKeyWritePerMinute,
+            int redirectPerMinute,
+            int authPerMinute,
+            int unlockPerMinute
+    ) {
+        static RateLimit defaults() {
+            return new RateLimit(30, 120, 300, 600, 10, 10);
+        }
+    }
 }

@@ -6,7 +6,7 @@ import com.shorty.analytics.AnalyticsQueryService;
 import com.shorty.analytics.AnalyticsQueryService.Granularity;
 import com.shorty.analytics.LiveClickHub;
 import com.shorty.config.ClickStreamProperties;
-import com.shorty.support.InfrastructureIT;
+import com.shorty.support.HighLimitIT;
 import com.shorty.url.UrlEntity;
 import com.shorty.url.UrlRepository;
 import java.time.Duration;
@@ -26,7 +26,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
             "app.clicks.stream=clicks-once",
             "app.clicks.group=click-workers-once"
         })
-class ClickExactlyOnceIT extends InfrastructureIT {
+class ClickExactlyOnceIT extends HighLimitIT {
 
     @Autowired
     StringRedisTemplate redis;

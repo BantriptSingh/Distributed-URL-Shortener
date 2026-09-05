@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shorty.click.ClickRepository;
-import com.shorty.support.InfrastructureIT;
+import com.shorty.support.HighLimitIT;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -21,7 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-class UrlFlowIT extends InfrastructureIT {
+class UrlFlowIT extends HighLimitIT {
 
     @Autowired
     MockMvc mvc;
@@ -138,6 +138,35 @@ class UrlFlowIT extends InfrastructureIT {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("invalid_url"));
+    }
+
+    @Test
+    void privateAndMetadataUrlsRejected() throws Exception {
+        mvc.perform(post("/api/v1/urls")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"destinationUrl":"http://127.0.0.1/"}
+                                """))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/urls")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"destinationUrl":"http://10.0.0.1/"}
+                                """))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/urls")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"destinationUrl":"http://169.254.169.254/latest/meta-data"}
+                                """))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/urls")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"destinationUrl":"https://evil.blocked.test/phish"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("blocked_url"));
     }
 
     private void waitForClicks(long urlId, int expected) throws InterruptedException {

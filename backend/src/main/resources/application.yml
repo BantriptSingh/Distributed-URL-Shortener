@@ -46,3 +46,11 @@ app:
     refresh-ttl: 14d
   unlock-ttl: 5m
   claim-ttl: 7d
+  live-sse-max: 500
+  rate-limit:
+    guest-create-per-minute: 30
+    jwt-create-per-minute: 120
+    api-key-write-per-minute: 300
+    redirect-per-minute: 600
+    auth-per-minute: 10
+    unlock-per-minute: 10

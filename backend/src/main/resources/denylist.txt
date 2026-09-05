@@ -1,0 +1,2 @@
+# Hostname denylist (exact host or subdomain suffix). Google Safe Browsing is a later hook.
+evil.blocked.test

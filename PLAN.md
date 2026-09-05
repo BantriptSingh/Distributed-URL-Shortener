@@ -47,6 +47,7 @@ These are locked unless you override them before a milestone starts.
 | A29 | Unlock rate limit | `POST /api/v1/urls/{code}/unlock` is **10 attempts/min per IP per code** (same tier as auth). Wired in **M4** with the rest of Redis rate limiting — password gates are Core v1 (A6). |
 | A30 | Live SSE cap | Cap concurrent connections on public `GET /api/v1/analytics/live` (e.g. **500**) in **M4** rate-limiting work. Unauthenticated streaming must not be unbounded. Do not implement in M2. |
 | A31 | Link preview | Public `GET /api/v1/urls/{code}` includes **`destinationUrl` by default**. Column `urls.hide_preview` (boolean, default `false`); owners set it via PATCH to omit the destination from public responses. Owners always see the destination. |
+| A32 | Refresh reuse | Presenting a **rotated (revoked) refresh token** is reuse: revoke **all active refresh tokens for that user** (every session), then 401 `refresh_reuse`. Unknown tokens stay 401 without a global logout. |
 
 ---
 

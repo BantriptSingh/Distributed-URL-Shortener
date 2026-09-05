@@ -22,7 +22,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, TokenAuthFilter tokenAuthFilter) throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http, TokenAuthFilter tokenAuthFilter, com.shorty.ratelimit.RateLimitFilter rateLimitFilter)
+            throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -65,7 +67,8 @@ public class SecurityConfig {
                     res.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     res.getWriter().write("{\"code\":\"unauthorized\",\"message\":\"Authentication required\"}");
                 }))
-                .addFilterBefore(tokenAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(tokenAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(rateLimitFilter, TokenAuthFilter.class);
         return http.build();
     }
 }

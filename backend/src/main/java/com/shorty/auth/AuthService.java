@@ -26,6 +26,7 @@ public class AuthService {
     private final SnowflakeIdGenerator ids;
     private final Duration refreshTtl;
     private final boolean exposeReset;
+    private final RefreshTokenFamilyRevoker familyRevoker;
 
     public AuthService(
             UserRepository users,
@@ -34,6 +35,7 @@ public class AuthService {
             PasswordEncoder passwords,
             JwtService jwt,
             SnowflakeIdGenerator ids,
+            RefreshTokenFamilyRevoker familyRevoker,
             @Value("${app.jwt.refresh-ttl:14d}") Duration refreshTtl,
             @Value("${DEV_EXPOSE_RESET_TOKEN:false}") boolean exposeReset) {
         this.users = users;
@@ -42,6 +44,7 @@ public class AuthService {
         this.passwords = passwords;
         this.jwt = jwt;
         this.ids = ids;
+        this.familyRevoker = familyRevoker;
         this.refreshTtl = refreshTtl;
         this.exposeReset = exposeReset;
     }
@@ -78,7 +81,15 @@ public class AuthService {
         RefreshTokenEntity existing = refreshTokens
                 .findByTokenHash(hash)
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "invalid_refresh", "Refresh token is invalid"));
-        if (existing.getRevokedAt() != null || existing.getExpiresAt().isBefore(Instant.now())) {
+        if (existing.getRevokedAt() != null) {
+            familyRevoker.revokeAllSessions(existing.getUserId());
+            log.warn("refresh_token_reuse userId={} — revoked all sessions", existing.getUserId());
+            throw new ApiException(
+                    HttpStatus.UNAUTHORIZED,
+                    "refresh_reuse",
+                    "Refresh token reuse detected; all sessions have been revoked");
+        }
+        if (existing.getExpiresAt().isBefore(Instant.now())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "invalid_refresh", "Refresh token is invalid");
         }
         existing.setRevokedAt(Instant.now());

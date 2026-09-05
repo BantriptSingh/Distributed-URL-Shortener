@@ -59,13 +59,15 @@ class UrlServiceRetryTest {
                 "http://localhost:5173",
                 "http://localhost:5173",
                 new AppProperties.Cache(Duration.ofHours(24), Duration.ofSeconds(30)),
-                new AppProperties.ShortCode(7, 5));
+                new AppProperties.ShortCode(7, 5),
+                null,
+                500);
         service = new UrlService(
                 urls,
                 cache,
                 codes,
                 new SnowflakeIdGenerator(1),
-                new DestinationUrlValidator(),
+                new DestinationUrlValidator(new UrlReputation(java.util.List.of())),
                 new CustomAliasValidator(),
                 props,
                 clickCounts,

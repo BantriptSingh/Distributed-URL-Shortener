@@ -1,6 +1,6 @@
 # Distributed URL shortener
 
-Core v1 is in progress. **M1 (this checkout):** create + cache-first redirect against Postgres and Redis.
+Core v1 is in progress. **M4 (this checkout):** rate limits, SSRF, IP-hash and negative-cache tests.
 
 ## Local (M1–M2)
 
@@ -30,7 +30,7 @@ Custom aliases are stored and looked up **lowercase**. Random codes are 7-charac
 
 - **Short codes:** CSPRNG Base62, unique on `LOWER(short_code)`, 5 insert retries then HTTP 500 `short_code_exhausted`.
 - **IP hashing:** click rows store salted SHA-256 (`IP_HASH_SALT`); the raw IP exists only ephemerally on the Redis stream. Local placeholder salt is in `.env.example` — generate a real salt before production (`openssl rand -base64 32`).
-- **SSRF / Safe Browsing:** protocol check only in M1; DNS SSRF + denylist file in M4; third-party reputation is a documented hook later.
+- **SSRF / reputation:** create-time http(s) only, DNS resolution (fail closed), reject loopback / RFC1918 / link-local / ULA / metadata IPs. Hostname denylist is `backend/src/main/resources/denylist.txt`. Google Safe Browsing is a documented hook (`UrlReputation.lookupSafeBrowsing`) and is not called yet.
 
 ## Deploy
 

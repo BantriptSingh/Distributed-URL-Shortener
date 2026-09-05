@@ -1,13 +1,17 @@
 package com.shorty.analytics;
 
+import com.shorty.api.ApiException;
+import com.shorty.config.AppProperties;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -18,17 +22,36 @@ public class LiveClickHub {
 
     private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
     private final Map<String, CopyOnWriteArrayList<SseEmitter>> byCode = new ConcurrentHashMap<>();
+    private final AtomicInteger liveCount = new AtomicInteger();
+    private final int maxLive;
+
+    public LiveClickHub(AppProperties props) {
+        this.maxLive = props.liveSseMax();
+    }
 
     public SseEmitter subscribe() {
+        if (liveCount.incrementAndGet() > maxLive) {
+            liveCount.decrementAndGet();
+            throw new ApiException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "rate_limited",
+                    "Too many live analytics connections",
+                    1);
+        }
         SseEmitter emitter = new SseEmitter(300_000L);
         emitters.add(emitter);
-        emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(() -> emitters.remove(emitter));
-        emitter.onError(e -> emitters.remove(emitter));
+        Runnable drop = () -> {
+            if (emitters.remove(emitter)) {
+                liveCount.decrementAndGet();
+            }
+        };
+        emitter.onCompletion(drop);
+        emitter.onTimeout(drop);
+        emitter.onError(e -> drop.run());
         try {
             emitter.send(SseEmitter.event().name("hello").data("{\"ok\":true}"));
         } catch (IOException e) {
-            emitters.remove(emitter);
+            drop.run();
         }
         return emitter;
     }
@@ -87,7 +110,7 @@ public class LiveClickHub {
         }
     }
 
-    int subscriberCount() {
+    public int subscriberCount() {
         return emitters.size();
     }
 }
