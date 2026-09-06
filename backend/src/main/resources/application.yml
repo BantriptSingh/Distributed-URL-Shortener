@@ -1,7 +1,7 @@
 # Local / Testcontainers override via env. Secrets: see repo .env.example.
 
 server:
-  port: 8080
+  port: ${PORT:8080}
   servlet:
     async-request-timeout: 300000
 
