@@ -1,0 +1,9 @@
+.git
+**/.gradle
+**/build
+**/node_modules
+**/dist
+**/.env
+frontend/playwright-report
+e2e/test-results
+e2e/playwright-report
